@@ -1,0 +1,24 @@
+name: Archipelo Checks
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  ######################################
+  checks:
+    name: Archipelo Checks
+    runs-on: ubuntu-latest
+    env:
+      ARCHIPELO_API_KEY: ${{ secrets.ARCHIPELO_API_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Archipelo CLI
+        uses: archipelo/setup-archipelo@v1.0.1
+      - name: Trigger SSDF Checks
+        run: archipelo scans ssdf-checks trigger --qa --owner=${{ secrets.REPOSITORY_OWNER }} --name=${{ secrets.REPOSITORY_NAME }} --hash=${{ github.sha }}
+      - name: Trigger SLSA checks
+        run: archipelo scans slsa-checks trigger --qa --owner=${{ secrets.REPOSITORY_OWNER }} --name=${{ secrets.REPOSITORY_NAME }} --hash=${{ github.sha }}
