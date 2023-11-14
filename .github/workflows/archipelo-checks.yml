@@ -21,4 +21,4 @@ jobs:
       - name: Trigger SSDF Checks
         run: archipelo scans ssdf-checks trigger --qa --owner=${{ secrets.REPOSITORY_OWNER }} --name=${{ secrets.REPOSITORY_NAME }} --hash=${{ github.sha }}
       - name: Trigger SLSA checks
-        run: archipelo scans slsa-checks trigger --qa --owner=${{ secrets.REPOSITORY_OWNER }} --name=${{ secrets.REPOSITORY_NAME }} --hash=${{ github.sha }}
+        run: archipelo scans slsa-checks trigger --qa --owner=${{ secrets.REPOSITORY_OWNER }} --name=${{ secrets.REPOSITORY_NAME }} --hash=${{ github.sha }} --path=example.intoto.jsonl
