@@ -1,5 +1,4 @@
-// Package api provides the harness to expose APIs to the world.
-package api
+package main
 
 import (
 	"context"
@@ -9,13 +8,11 @@ import (
 	"io"
 	"net/http"
 	"reflect"
-	"strings"
 )
 
 var (
 	contextType = reflect.TypeOf((*context.Context)(nil)).Elem()
 	errorType   = reflect.TypeOf((*error)(nil)).Elem()
-	uuidType    = reflect.TypeOf(uuid.Nil)
 	httpReqType = reflect.TypeOf(&http.Request{})
 	emptyJSON   = []byte("{}\n")
 	jsonCT      = "application/json; charset=utf-8"
@@ -32,8 +29,6 @@ func unwrap(err interface{}) error {
 	return err.(error)
 }
 
-// Error can be returned by a handler if it wishes to fully customize the
-// returned value.
 type Error struct {
 	Status  int
 	Message string
@@ -44,13 +39,10 @@ func (e *Error) Error() string {
 }
 
 type Manager struct {
-	log *zerolog.Logger
 }
 
-func NewManager(log *zerolog.Logger) *Manager {
-	return &Manager{
-		log: log,
-	}
+func NewManager() *Manager {
+	return &Manager{}
 }
 
 type apiFunc struct {
@@ -81,21 +73,13 @@ func (a *apiFunc) prepIn() error {
 	default:
 		return errors.New("must accept 1, 2 or 3 arguments")
 	case 1:
-		// only context
 		break
 	case 2:
 		// either hasAccountID or hasInput
 		argType := a.ft.In(offset + 1)
-		if argType == uuidType {
-			a.hasAccountID = true
-		} else {
-			a.hasInput = true
-			a.inputType = argType
-		}
+		a.hasInput = true
+		a.inputType = argType
 	case 3:
-		if a.ft.In(offset+1) != uuidType {
-			return errors.New("second argument must be uuid.UUID")
-		}
 		a.hasAccountID = true
 		a.hasInput = true
 		a.inputType = a.ft.In(offset + 2)
@@ -111,7 +95,6 @@ func (a *apiFunc) prepOut() error {
 	default:
 		return errors.New("must return 0, 1 or 2 values")
 	case 0:
-		// no return values is totally fine
 	case 1:
 		if a.ft.Out(0) != errorType {
 			return errors.New("single return value must be an error")
@@ -155,26 +138,7 @@ func (m *Manager) we(f interface{}) (http.HandlerFunc, error) {
 			in = append(in, reflect.ValueOf(r))
 		}
 		if af.hasAccountID {
-			var (
-				accountID any
-				err       error
-			)
-			if unleash.IsEnabled(arunleash.FeatureAuth0Auth) {
-				accountID, err = auth.Auth0IdentityIDFromContext(ctx)
-			} else {
-				accountID, err = auth.IdentityIDFromContext(ctx)
-			}
-			if err != nil {
-				if errors.Is(err, auth.ErrNoIdentityInContext) {
-					m.SendError(w, r, &Error{
-						Status:  http.StatusUnauthorized,
-						Message: err.Error(),
-					})
-				} else {
-					m.SendError(w, r, err)
-				}
-				return
-			}
+			accountID := 1
 			in = append(in, reflect.ValueOf(accountID))
 		}
 		if af.hasInput {
@@ -231,13 +195,7 @@ func (m *Manager) sendJSON(
 	w.Header().Add("Content-Type", jsonCT)
 	w.WriteHeader(status)
 	encoder := json.NewEncoder(w)
-	if env.Dev || strings.HasPrefix(r.Header.Get("User-Agent"), "curl/") {
-		encoder.SetIndent("", "  ")
-	}
 	if err := encoder.Encode(v); err != nil {
-		// should be internal error since serialization is on us
-		// TODO: should only log errors relating to marshaling
-		m.log.Error().Func(arlog.ErrWithRequest(err, r))
 		return
 	}
 }
@@ -249,8 +207,6 @@ func (m *Manager) SendError(w http.ResponseWriter, r *http.Request, err error) {
 	if apierr, ok := err.(*Error); ok {
 		status = apierr.Status
 		message = apierr.Message
-	} else {
-		m.log.Error().Func(arlog.ErrWithRequest(err, r))
 	}
 
 	m.sendJSON(w, r, status, struct {
